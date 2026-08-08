@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Fountainbridge Slider
  * Plugin URI:  https://fountainbridge.hu
- * Description: Könnyű, gyors slider plugin réteges (layer) animációkkal és egykattintásos Slider Revolution importtal. Shortcode: [fb_slider id="..."] vagy [fb_slider alias="..."]
- * Version:     260808
+ * Description: A lightweight slider plugin for WordPress - import option from popular sliders like Slider Revolution, Maser Slider, Meta Slider - Shortcode: [fb_slider id="..."] or [fb_slider alias="..."]
+ * Version:     v260808
  * Author:      Fountainbridge
  * Author URI:  https://fountainbridge.hu
  * License:     GPLv2 or later
