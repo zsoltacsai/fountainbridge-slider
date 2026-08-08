@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Fountainbridge Slider
  * Plugin URI:  https://fountainbridge.hu
- * Description: A lightweight slider plugin for WordPress - import option from popular sliders like Slider Revolution, Maser Slider, Meta Slider - Shortcode: [fb_slider id="..."] or [fb_slider alias="..."]
- * Version:     v260808
+ * Description: A lightweight slider plugin for WordPress - import option from popular sliders like Slider Revolution, Master Slider, Meta Slider - Shortcode: [fb_slider id="..."] or [fb_slider alias="..."]
+ * Version:     260808
  * Author:      Fountainbridge
  * Author URI:  https://fountainbridge.hu
  * License:     GPLv2 or later
@@ -131,10 +131,11 @@ final class FB_Slider_Plugin {
 		foreach ( array_slice( $slides, 0, 50 ) as $sl ) {
 			if ( ! is_array( $sl ) ) continue;
 			$slide = [
-				'bg'      => esc_url_raw( isset( $sl['bg'] ) ? $sl['bg'] : '' ),
-				'bgColor' => sanitize_text_field( isset( $sl['bgColor'] ) ? $sl['bgColor'] : '' ),
-				'delay'   => isset( $sl['delay'] ) ? max( 0, (int) $sl['delay'] ) : 0,
-				'layers'  => [],
+				'bg'        => esc_url_raw( isset( $sl['bg'] ) ? $sl['bg'] : '' ),
+				'bgColor'   => sanitize_text_field( isset( $sl['bgColor'] ) ? $sl['bgColor'] : '' ),
+				'delay'     => isset( $sl['delay'] ) ? max( 0, (int) $sl['delay'] ) : 0,
+				'_thumbImg' => isset( $sl['_thumbImg'] ) ? esc_url_raw( (string) $sl['_thumbImg'] ) : '',
+				'layers'    => [],
 			];
 			$layers = isset( $sl['layers'] ) && is_array( $sl['layers'] ) ? $sl['layers'] : [];
 			foreach ( array_slice( $layers, 0, 40 ) as $ly ) {
@@ -425,8 +426,20 @@ final class FB_Slider_Plugin {
 		$s['bullets']     = false;
 		$s['autoplay']    = filter_var( isset( $attr['autoplay'] )    ? $attr['autoplay']    : 'false', FILTER_VALIDATE_BOOLEAN );
 		$s['loop']        = filter_var( isset( $attr['loop'] )        ? $attr['loop']        : 'true',  FILTER_VALIDATE_BOOLEAN );
-		$s['thumbs']      = filter_var( isset( $attr['thumbs'] )      ? $attr['thumbs']      : 'false', FILTER_VALIDATE_BOOLEAN );
+		$s['pauseHover']  = true;
 		$s['thumbsAlign'] = isset( $attr['thumbs_align'] ) ? sanitize_text_field( $attr['thumbs_align'] ) : 'bottom';
+
+		// thumbs=true OR thumbs_align being explicitly set both enable the thumbstrip
+		$thumbs_explicit = isset( $attr['thumbs'] ) ? filter_var( $attr['thumbs'], FILTER_VALIDATE_BOOLEAN ) : null;
+		$has_thumbs_align = isset( $attr['thumbs_align'] );
+		$s['thumbs'] = ( true === $thumbs_explicit ) || ( null === $thumbs_explicit && $has_thumbs_align );
+
+		// Thumb strip dimensions — generous defaults for the bottom strip
+		$s['thumbW'] = in_array( $s['thumbsAlign'], [ 'left', 'right' ], true ) ? 120 : 160;
+		$s['thumbH'] = in_array( $s['thumbsAlign'], [ 'left', 'right' ], true ) ? 100 :  90;
+
+		// auto_height: don't force a height — the bgimg object-fit:cover handles proportions
+		// The default slider height is used as the grid reference; CSS scales it responsively
 
 		$slides = [];
 		foreach ( $ids as $att_id ) {
@@ -435,23 +448,30 @@ final class FB_Slider_Plugin {
 			$caption = wp_get_attachment_caption( $att_id );
 			$layers  = [];
 			if ( $caption && 'false' !== strtolower( (string) ( isset( $attr['caption'] ) ? $attr['caption'] : 'true' ) ) ) {
-				$L = self::default_layer();
-				$L['type']       = 'text';
-				$L['content']    = esc_html( $caption );
-				$L['x']          = 40;
-				$L['y']          = (int) round( $s['height'] * 0.78 );
-				$L['fontSize']   = 18;
-				$L['fontWeight'] = 400;
-				$L['color']      = '#ffffff';
-				$L['bg']         = 'rgba(0,0,0,.5)';
-				$L['pad']        = '8px 16px';
-				$L['animIn']     = 'fade';
-				$L['start']      = 300;
-				$L['dur']        = 400;
+				$L            = self::default_layer();
+				$L['type']    = 'text';
+				$L['content'] = esc_html( $caption );
+				$L['x']       = 40;
+				$L['y']       = (int) round( $s['height'] * 0.82 );
+				$L['fontSize']    = 16;
+				$L['fontWeight']  = 400;
+				$L['color']   = '#ffffff';
+				$L['bg']      = 'rgba(0,0,0,.55)';
+				$L['pad']     = '6px 14px';
+				$L['animIn']  = 'fade';
+				$L['start']   = 200;
+				$L['dur']     = 400;
 				$layers[] = $L;
 			}
-			$thumb    = wp_get_attachment_image_url( $att_id, 'thumbnail' );
-			$slides[] = [ 'bg' => esc_url_raw( $url ), 'bgColor' => '', 'delay' => 0, '_thumbImg' => $thumb ?: '', 'layers' => $layers ];
+			// Use medium size for thumbs if available, else thumbnail
+			$thumb = wp_get_attachment_image_url( $att_id, 'medium' ) ?: wp_get_attachment_image_url( $att_id, 'thumbnail' );
+			$slides[] = [
+				'bg'       => esc_url_raw( $url ),
+				'bgColor'  => '',
+				'delay'    => 0,
+				'_thumbImg'=> $thumb ?: $url,
+				'layers'   => $layers,
+			];
 		}
 		if ( ! $slides ) return $output;
 
@@ -2189,8 +2209,8 @@ final class FB_Slider_Plugin {
 		$this->assets_printed = true;
 		?>
 <style id="fbsl-css">
-.fbsl{position:relative;width:100%;overflow:hidden}
-.fbsl-stage{position:relative;width:100%;height:100%}
+.fbsl{position:relative;width:100%;overflow:hidden;display:flex;flex-direction:column}
+.fbsl-stage{position:relative;width:100%;flex:1 0 auto}
 .fbsl-bgimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:0;display:block}
 .fbsl-slide{position:absolute;inset:0;background-position:center;background-size:cover;background-repeat:no-repeat;opacity:0;visibility:hidden;transition:opacity .8s ease,transform .8s ease;z-index:1}
 .fbsl-slide.fbsl-on{opacity:1;visibility:visible;z-index:2}
@@ -2210,9 +2230,10 @@ final class FB_Slider_Plugin {
 .fbsl-dots{position:absolute;bottom:14px;left:0;right:0;text-align:center;z-index:5}
 .fbsl-dot{width:11px;height:11px;border-radius:50%;border:2px solid #fff;background:transparent;margin:0 5px;padding:0;cursor:pointer;transition:background .2s}
 .fbsl-dot.fbsl-on,.fbsl-dot:hover{background:#fff}
-.fbsl-thumbs{display:flex;gap:4px;background:#111;overflow:hidden;flex-shrink:0}
-.fbsl-thumbs-bottom,.fbsl-thumbs-top{flex-direction:row;overflow-x:auto;width:100%}
-.fbsl-thumbs-left,.fbsl-thumbs-right{flex-direction:column;overflow-y:auto;position:absolute;top:0}
+.fbsl-thumbs{display:flex;gap:3px;background:#111;flex-shrink:0;overflow:hidden}
+.fbsl-thumbs-bottom,.fbsl-thumbs-top{flex-direction:row;flex-wrap:nowrap;width:100%;position:relative;overflow:hidden}
+.fbsl-thumbs-top{order:-1}
+.fbsl-thumbs-left,.fbsl-thumbs-right{flex-direction:column;overflow-y:hidden;position:absolute;top:0;bottom:0}
 .fbsl-thumbs-left{left:0}.fbsl-thumbs-right{right:0}
 .fbsl-thumb{flex-shrink:0;background-size:cover;background-position:center;background-color:#333;border:2px solid transparent;cursor:pointer;opacity:.6;transition:opacity .2s,border-color .2s;padding:0}
 .fbsl-thumb.fbsl-on,.fbsl-thumb:hover{opacity:1;border-color:#fff}
@@ -2247,9 +2268,21 @@ final class FB_Slider_Plugin {
 		function resize(){
 			var ow = root.clientWidth;
 			if (!ow) return;
-			var s = ow / cfg.w;
-			var h = Math.round(cfg.h * Math.min(s, 1.5));
-			root.style.height = h + 'px';
+			// Deduct thumbstrip from available height
+			var thumbsEl = root.querySelector('.fbsl-thumbs');
+			var thumbsH = 0, thumbsW = 0;
+			if (thumbsEl) {
+				if (thumbsEl.classList.contains('fbsl-thumbs-bottom') || thumbsEl.classList.contains('fbsl-thumbs-top')) {
+					thumbsH = thumbsEl.offsetHeight || parseInt(thumbsEl.style.height) || 0;
+				} else {
+					thumbsW = thumbsEl.offsetWidth || parseInt(thumbsEl.style.width) || 0;
+				}
+			}
+			var availW = ow - thumbsW;
+			var s   = availW / cfg.w;
+			var h   = Math.round(cfg.h * Math.min(s, 1.5));
+			// Total container height = stage + thumbstrip
+			root.style.height = (h + thumbsH) + 'px';
 			slides.forEach(function(sl){
 				var g = sl.querySelector('.fbsl-grid');
 				if (!g) return;
@@ -2324,6 +2357,18 @@ final class FB_Slider_Plugin {
 			}, delayOf(cur));
 		}
 
+		function resizeThumbs(){
+			var strip = root.querySelector('.fbsl-thumbs-bottom, .fbsl-thumbs-top');
+			if (!strip || !thumbs.length) return;
+			var available = strip.clientWidth - (thumbs.length - 1) * 3; // 3px gap
+			var tw = Math.max(40, Math.floor(available / thumbs.length));
+			thumbs.forEach(function(t){
+				t.style.width  = tw + 'px';
+				t.style.minWidth = tw + 'px';
+				t.style.maxWidth = tw + 'px';
+			});
+		}
+
 		var prev = root.querySelector('.fbsl-prev'), next = root.querySelector('.fbsl-next');
 		if (prev) prev.addEventListener('click', function(){ show(cur - 1); });
 		if (next) next.addEventListener('click', function(){ show(cur + 1); });
@@ -2345,8 +2390,9 @@ final class FB_Slider_Plugin {
 			if (Math.abs(dx) > 50) show(cur + (dx < 0 ? 1 : -1));
 		}, {passive:true});
 
-		window.addEventListener('resize', resize);
+		window.addEventListener('resize', function(){ resize(); resizeThumbs(); });
 		resize();
+		resizeThumbs();
 		playLayers(slides[0], delayOf(0));
 		schedule();
 	}
